@@ -1,18 +1,12 @@
 import os
 import socket
 import threading
-import mysql.connector
+import sqlite3
 import os
 import hashlib
 
-db = mysql.connector.connect(
-    host="localhost",
-    user="root",
-    password=os.getenv("MYSQL_PASSWORD"),
-    database="filesharingsystem"
-)
 
-my_cursor = db.cursor()
+
 
 IP = "localhost"
 PORT = 4450
@@ -55,31 +49,45 @@ def check_user(conn, addr):
         print(f"Username: {username}")
         print(f"Password: {password}")
 
-        check_user = "SELECT * FROM users WHERE username = %s"
+        check_user = "SELECT * FROM users WHERE username = ?"
         val = (username,)
 
-        my_cursor.execute(check_user,val)
+        result = None
+        with sqlite3.connect("database.db") as db:
+            my_cursor = db.cursor()
+            my_cursor.execute(check_user,val)
 
-        result = my_cursor.fetchall()
+            result = my_cursor.fetchall()
+            my_cursor.close()
         print(result)
         if len(result) == 0:
-            sql = "INSERT INTO users (username, password) VALUES (%s, %s)"
-            val = (username, hashlib.sha256(password.encode(FORMAT)).hexdigest())
-            my_cursor.execute(sql, val)
-            db.commit()
+            with sqlite3.connect("database.db") as db:
+                my_cursor = db.cursor()
+                sql = "INSERT INTO users (username, password) VALUES (?, ?)"
+                val = (username, hashlib.sha256(password.encode(FORMAT)).hexdigest())
+                my_cursor.execute(sql, val)
+                db.commit()
+                my_cursor.close()
+            send_data = "200@OK"
+            conn.send(send_data.encode(FORMAT))
         else:
-            send_data = "403"
+            send_data = "403@FORBIDDEN"
             conn.send(send_data.encode(FORMAT))
     elif cmd == "LOGIN":
         username = data[1]
         password = data[2]
 
-        sql = "SELECT * FROM users WHERE username = %s AND password =%s"
+        sql = "SELECT * FROM users WHERE username = ? AND password =?"
 
         val = (username, hashlib.sha256(password.encode(FORMAT)).hexdigest())
-        my_cursor.execute(sql, val)
+        result = None
+        with sqlite3.connect("database.db") as db:
+            my_cursor = db.cursor()
+            my_cursor.execute(sql, val)
 
-        result = my_cursor.fetchall()
+            result = my_cursor.fetchall()
+            my_cursor.close()
+
         print(result)
         if len(result) == 0:
             send_data = "FAILED"
@@ -95,6 +103,25 @@ def main():
     server.bind(ADDR)
     server.listen()
     print(f"Server listening on {IP}: {PORT}")
+
+    with sqlite3.connect("database.db") as db:
+        my_cursor = db.cursor()
+        sql = "PRAGMA table_info(users);"
+        my_cursor.execute(sql)
+        users = my_cursor.fetchone()
+        print(users)
+        if users is None:
+            sql = """CREATE TABLE users (
+                username varchar(255),
+                password varchar(255)
+            );"""
+            my_cursor.execute(sql)
+
+        my_cursor.execute(sql)
+        db.commit()
+        my_cursor.close()
+
+
     while True:
         conn, addr = server.accept()
         thread = threading.Thread(target=check_user, args=(conn, addr))
@@ -102,5 +129,4 @@ def main():
 
 
 if __name__ == "__main__":
-    print(db)
     main()
