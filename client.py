@@ -22,7 +22,7 @@ def main():
 
         client.send(f"SIGNUP{SEPERATOR}{username}{SEPERATOR}{password}".encode(FORMAT))
         data = client.recv(SIZE).decode(FORMAT)
-
+        print(data)
         cmd, msg = data.split(SEPERATOR)
 
         if cmd == "200":
