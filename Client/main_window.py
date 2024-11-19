@@ -31,15 +31,25 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.actionLog_In.triggered.connect(self.open_login_window)
         self.actionConnect_to_Server.triggered.connect(self.open_connection_window)
     
+    def closeEvent(self, event):
+        QtWidgets.QApplication.closeAllWindows()
+        event.accept()
+
     def connect(self, ip, port):
         try:
-            self.connector = Connector(ip, port)
+            self.connector = Connector(self, ip, port)
         except ConnectionRefusedError:
-            print("Connection Refused") #will turn into exception windows in the future
+            QtWidgets.QMessageBox.critical(self, "ERROR", "Connection Refused")
             self.connector = None
         except ValueError:
-            print("Input a proper port number")
+            QtWidgets.QMessageBox.critical(self, "ERROR", "Input a proper port number")
             self.connector = None
+        else:
+            self.actionSign_Up.setEnabled(True)
+            self.actionLog_In.setEnabled(True)
+            self.actionConnect_to_Server.setEnabled(False)
+            self.ConnectionWindow.close()
+            QtWidgets.QMessageBox.information(self, "Connection", "You are now connected to the server")
     
     def open_connection_window(self):
         self.ConnectionWindow = ConnectToServer(self)

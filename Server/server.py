@@ -39,62 +39,63 @@ def handle_client(conn, addr):
 
 
 def check_user(conn, addr):
-    data = conn.recv(SIZE).decode(FORMAT)
-    data = data.split("@")
-    cmd = data[0]
-
-    if cmd == "SIGNUP":
-        username = data[1]
-        password = data[2]
-        print(f"Username: {username}")
-        print(f"Password: {password}")
-
-        check_user = "SELECT * FROM users WHERE username = ?"
-        val = (username,)
-
-        result = None
-        with sqlite3.connect("database.db") as db:
-            my_cursor = db.cursor()
-            my_cursor.execute(check_user,val)
-
-            result = my_cursor.fetchall()
-            my_cursor.close()
-        print(result)
-        if len(result) == 0:
+    while True:
+        data = conn.recv(SIZE).decode(FORMAT)
+        data = data.split("@")
+        cmd = data[0]
+    
+        if cmd == "SIGNUP":
+            username = data[1]
+            password = data[2]
+            print(f"Username: {username}")
+            print(f"Password: {password}")
+    
+            check_user = "SELECT * FROM users WHERE username = ?"
+            val = (username,)
+    
+            result = None
             with sqlite3.connect("database.db") as db:
                 my_cursor = db.cursor()
-                sql = "INSERT INTO users (username, password) VALUES (?, ?)"
-                val = (username, hashlib.sha256(password.encode(FORMAT)).hexdigest())
-                my_cursor.execute(sql, val)
-                db.commit()
+                my_cursor.execute(check_user,val)
+    
+                result = my_cursor.fetchall()
                 my_cursor.close()
-            send_data = "200@OK"
-            conn.send(send_data.encode(FORMAT))
-        else:
-            send_data = "403@FORBIDDEN"
-            conn.send(send_data.encode(FORMAT))
-    elif cmd == "LOGIN":
-        username = data[1]
-        password = data[2]
-
-        sql = "SELECT * FROM users WHERE username = ? AND password =?"
-
-        val = (username, hashlib.sha256(password.encode(FORMAT)).hexdigest())
-        result = None
-        with sqlite3.connect("database.db") as db:
-            my_cursor = db.cursor()
-            my_cursor.execute(sql, val)
-
-            result = my_cursor.fetchall()
-            my_cursor.close()
-
-        print(result)
-        if len(result) == 0:
-            send_data = "FAILED"
-            conn.send(f"{send_data}{SEPERATOR}{username}".encode(FORMAT))
-        else:
-            send_data = "SUCCESS"
-            conn.send(f"{send_data}{SEPERATOR}{username}".encode(FORMAT))
+            print(result)
+            if len(result) == 0:
+                with sqlite3.connect("database.db") as db:
+                    my_cursor = db.cursor()
+                    sql = "INSERT INTO users (username, password) VALUES (?, ?)"
+                    val = (username, hashlib.sha256(password.encode(FORMAT)).hexdigest())
+                    my_cursor.execute(sql, val)
+                    db.commit()
+                    my_cursor.close()
+                send_data = "200@OK"
+                conn.send(send_data.encode(FORMAT))
+            else:
+                send_data = "403@FORBIDDEN"
+                conn.send(send_data.encode(FORMAT))
+        elif cmd == "LOGIN":
+            username = data[1]
+            password = data[2]
+    
+            sql = "SELECT * FROM users WHERE username = ? AND password =?"
+    
+            val = (username, hashlib.sha256(password.encode(FORMAT)).hexdigest())
+            result = None
+            with sqlite3.connect("database.db") as db:
+                my_cursor = db.cursor()
+                my_cursor.execute(sql, val)
+    
+                result = my_cursor.fetchall()
+                my_cursor.close()
+    
+            print(result)
+            if len(result) == 0:
+                send_data = "FAILED"
+                conn.send(f"{send_data}{SEPERATOR}{username}".encode(FORMAT))
+            else:
+                send_data = "SUCCESS"
+                conn.send(f"{send_data}{SEPERATOR}{username}".encode(FORMAT))
 
 
 def main():
