@@ -1,12 +1,14 @@
 import os
 import socket
+from PySide6 import QtWidgets
 
 SIZE = 1024
 FORMAT = 'utf-8'
 SEPERATOR = "@"
 
 class Connector():
-    def __init__(self, ip, port):
+    def __init__(self, parent, ip, port):
+        self.parent = parent
         self.addr = (ip, int(port))
         self.client = None
         self.authenticated = False
@@ -20,10 +22,9 @@ class Connector():
         print(data)
         cmd, msg = data.split(SEPERATOR)
 
-        if cmd == "200":
-            print("Signed Up Successfully. Please Login.") #will eventually make windows for these print statements
-        else:
-            print("User Already Exists. Please Login.")
+        if cmd != "200":
+            QtWidgets.QMessageBox.information(self.parent, "User exists", "User already exists. Please login.")
+        
         self.login(username, password)
     
     def login(self, username, password):
@@ -35,6 +36,7 @@ class Connector():
         if cmd == "FAILED":
             print("Failed to authenticate user. Goodbye.")
         else:
+            QtWidgets.QMessageBox.information(self.parent, "Success", "You are now logged in")
             self.authenticated = True
 
 
