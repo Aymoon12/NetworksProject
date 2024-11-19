@@ -116,8 +116,6 @@ def main():
                 password varchar(255)
             );"""
             my_cursor.execute(sql)
-
-        my_cursor.execute(sql)
         db.commit()
         my_cursor.close()
 
