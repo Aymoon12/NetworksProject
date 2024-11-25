@@ -5,9 +5,6 @@ import sqlite3
 import os
 import hashlib
 
-
-
-
 IP = "localhost"
 PORT = 4450
 ADDR = (IP, PORT)
@@ -43,21 +40,21 @@ def check_user(conn, addr):
         data = conn.recv(SIZE).decode(FORMAT)
         data = data.split("@")
         cmd = data[0]
-    
+
         if cmd == "SIGNUP":
             username = data[1]
             password = data[2]
             print(f"Username: {username}")
             print(f"Password: {password}")
-    
+
             check_user = "SELECT * FROM users WHERE username = ?"
             val = (username,)
-    
+
             result = None
             with sqlite3.connect("database.db") as db:
                 my_cursor = db.cursor()
-                my_cursor.execute(check_user,val)
-    
+                my_cursor.execute(check_user, val)
+
                 result = my_cursor.fetchall()
                 my_cursor.close()
             print(result)
@@ -77,18 +74,18 @@ def check_user(conn, addr):
         elif cmd == "LOGIN":
             username = data[1]
             password = data[2]
-    
+
             sql = "SELECT * FROM users WHERE username = ? AND password =?"
-    
+
             val = (username, hashlib.sha256(password.encode(FORMAT)).hexdigest())
             result = None
             with sqlite3.connect("database.db") as db:
                 my_cursor = db.cursor()
                 my_cursor.execute(sql, val)
-    
+
                 result = my_cursor.fetchall()
                 my_cursor.close()
-    
+
             print(result)
             if len(result) == 0:
                 send_data = "FAILED"
@@ -96,7 +93,59 @@ def check_user(conn, addr):
             else:
                 send_data = "SUCCESS"
                 conn.send(f"{send_data}{SEPERATOR}{username}".encode(FORMAT))
+        elif cmd == "UPLOAD":
+            write_file = False
+            if not os.path.isfile(data[1]):  # see if file already exists
+                write_file = True
+                conn.send("GOOD".encode(FORMAT))
+            else:  # if file exists then check if they want to overwrite
+                conn.send("OVERWRITE".encode(FORMAT))
+                response = conn.recv(SIZE).decode(FORMAT)
+                if response == "YES":
+                    write_file = True
+                else:
+                    write_file = False
 
+            if write_file:  # create the new file and store data
+                nfile = open(data[1], "wb")
+                data = conn.recv(SIZE)  # after receive send conf
+                conn.send("OK".encode(FORMAT))
+
+                while data != "DONE".encode(FORMAT):
+                    nfile.write(data)
+                    data = conn.recv(SIZE)
+                    conn.send("OK".encode(FORMAT))
+                nfile.close()
+                print("file received")
+        elif cmd == "DOWNLOAD":
+            path = data[1]              # receive path
+            send_data = True
+            if os.path.isfile(path):    # see if file exists in server
+                conn.send("OK".encode(FORMAT))         # let client know file has been found
+            else:
+                conn.send("NO".encode(FORMAT))
+                send_data = False
+
+            if send_data:
+                file = open(path, 'rb')
+                # bytes_sent = SIZE
+                data = file.read(SIZE)
+                conn.send(data)
+                while data and conn.recv(SIZE).decode(FORMAT) == "OK":
+                    data = file.read(SIZE)
+                    conn.send(data)
+                conn.send("DONE".encode(FORMAT))
+                print("Server received file")
+                file.close()
+        elif cmd == "DELETE":
+            server_path = data[1]  # path to file that is to be deleted
+            if os.path.isfile(server_path):
+                os.remove(server_path)
+                conn.send("OK".encode(FORMAT))
+            else:
+                conn.send("NO".encode(FORMAT))
+        elif cmd == "DIR":
+            pass
 
 def main():
     print("Starting the server...")
@@ -119,8 +168,9 @@ def main():
             my_cursor.execute(sql)
         db.commit()
         my_cursor.close()
-
-
+    if not os.path.isdir("root"):
+        os.mkdir("root")
+        print("root directory created")
     while True:
         conn, addr = server.accept()
         thread = threading.Thread(target=check_user, args=(conn, addr))
