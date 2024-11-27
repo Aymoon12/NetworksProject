@@ -5,6 +5,7 @@ import sqlite3
 import os
 import hashlib
 
+
 IP = "localhost"
 PORT = 4450
 ADDR = (IP, PORT)
@@ -118,10 +119,10 @@ def check_user(conn, addr):
                 nfile.close()
                 print("file received")
         elif cmd == "DOWNLOAD":
-            path = data[1]              # receive path
+            path = data[1]  # receive path
             send_data = True
-            if os.path.isfile(path):    # see if file exists in server
-                conn.send("OK".encode(FORMAT))         # let client know file has been found
+            if os.path.isfile(path):  # see if file exists in server
+                conn.send("OK".encode(FORMAT))  # let client know file has been found
             else:
                 conn.send("NO".encode(FORMAT))
                 send_data = False
@@ -144,8 +145,56 @@ def check_user(conn, addr):
                 conn.send("OK".encode(FORMAT))
             else:
                 conn.send("NO".encode(FORMAT))
-        elif cmd == "DIR":
-            pass
+        elif cmd == "CREATE_SUBFOLDER":
+            path = data[1]  # path passed in
+            subfolder_name = data[2]  # subfolder name passed in
+            path_to_create = os.path.join(path, subfolder_name)
+            if os.path.exists(path_to_create):
+                os.makedirs(path_to_create)
+                conn.send("CREATED".encode(FORMAT))
+            else:
+                conn.send("NO".encode(FORMAT))
+
+        elif cmd == "DELETE_SUBFOLDER":
+            path_to_delete = data[1]
+            if os.path.exists(path_to_delete):  # Checks if path to be deleted exists
+                os.rmdir(path_to_delete)
+                conn.send("DELETED".encode(FORMAT))
+            else:
+                conn.send("NO".encode(FORMAT))
+        elif cmd == "LIST_DIR":
+
+            # Helper function
+            # Recursive function to list all files in directory then calls the function for every other directory
+            def list_files_and_directories(path, indent):
+                try:
+                    # Gets all files and directories
+                    items = os.listdir(path)
+
+                    # Split files and directories into two different arrays
+                    files = [item for item in items if os.path.isfile(os.path.join(path, item))]
+                    directories = [item for item in items if os.path.isdir(os.path.join(path, item))]
+
+                    print(f"{indent} Directory: {path}")
+                    if files:
+                        for file in files:
+                            print(f"{indent} -{file}")
+                    else:
+                        print(f"{indent} No Files")
+
+                    for directory in directories:
+                        next_path = os.path.join(path, directory)
+                        list_files_and_directories(next_path, indent + " ")
+
+                except Exception as e:
+                    print(f"There was an error in listing the files in the path {path}: {e}")
+                    conn.send("NO".encode(FORMAT))
+
+            root_directory = "root"
+            list_files_and_directories(root_directory, "")
+            conn.send("OK".encode(FORMAT))
+
+
 
 def main():
     print("Starting the server...")

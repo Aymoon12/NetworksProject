@@ -43,10 +43,10 @@ class Connector():
             self.authenticated = True
 
     def upload(self):
-        client_path = r""                                 # get users path
+        client_path = r""  # get users path
         ext = client_path.split('.')
 
-        server_dir = "root"                                                                 # dir to store file
+        server_dir = "root"  # dir to store file
 
         if len(ext) < 2:
             # error
@@ -58,7 +58,7 @@ class Connector():
 
             data = self.client.recv(SIZE).decode(FORMAT)
             send_file = True
-            if data == "OVERWRITE":                                                         # prompt if they want to overwrite
+            if data == "OVERWRITE":  # prompt if they want to overwrite
                 print("overwrite")
                 # if yes then:
                 self.client.send("YES".encode(FORMAT))
@@ -79,15 +79,14 @@ class Connector():
                 print("Server received file")
                 file.close()
 
-
     def download(self):
-        server_path = r""                          # path to file in server
+        server_path = r""  # path to file in server
         self.client.send(f"DOWNLOAD{SEPERATOR}{server_path}".encode(FORMAT))
         response = self.client.recv(SIZE).decode(FORMAT)
         if response == "OK":
             client_path = r"C:\Users\morbi\Downloads"
-            nfile = open(client_path+"\\"+os.path.basename(server_path), "wb")
-            data = self.client.recv(SIZE)   # after receive send conf
+            nfile = open(client_path + "\\" + os.path.basename(server_path), "wb")
+            data = self.client.recv(SIZE)  # after receive send conf
             self.client.send("OK".encode(FORMAT))
 
             while data != "DONE".encode(FORMAT):
@@ -105,6 +104,31 @@ class Connector():
             print("File deleted from server.")
         else:
             print("File could not be removed.")
+
+    def create_subfolder(self, subfolder_name, path):
+        self.client.send(f"CREATE_SUBFOLDER{SEPERATOR}{path}{SEPERATOR}{subfolder_name}".encode(FORMAT))
+        response = self.client.recv(SIZE).decode(FORMAT)
+        if response == "CREATED":
+            print("Subfolder created successfully.")
+        else:
+            print("Subfolder could not be created. Path does not exist.")
+
+    def delete_subfolder(self, path_to_delete):
+        self.client.send(f"DELETE{SEPERATOR}{path_to_delete}".encode(FORMAT))
+        response = self.client.recv(SIZE).decode(FORMAT)
+        if response == "OK":
+            print("Subfolder deleted successfully.")
+        else:
+            print("Subfolder could not be deleted.")
+
+    def list_all_files(self):
+        self.client.send(f"LIST_DIRECTORY{SEPERATOR}".encode(FORMAT))
+        response = self.client.recv(SIZE).decode(FORMAT)
+        if response == "OK":
+            print("All files listed successfully.")
+        else:
+            print("Files could not all be listed.")
+
 
 """    while authenticated:
         data = client.recv(SIZE).decode(FORMAT)
