@@ -65,11 +65,17 @@
    </property>
   </action>
   <action name="actionSign_Up">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
    <property name="text">
     <string>Sign Up</string>
    </property>
   </action>
   <action name="actionLog_In">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
    <property name="text">
     <string>Log In</string>
    </property>

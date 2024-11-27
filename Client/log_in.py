@@ -12,3 +12,4 @@ class LogIn(QtWidgets.QWidget, Ui_LogIn):
         username = self.lineEdit_username.text().strip()
         password = self.lineEdit_password.text().strip()
         self.connector.login(username, password)
+        self.close()

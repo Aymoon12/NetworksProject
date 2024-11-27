@@ -15,3 +15,4 @@ class SignUp(QtWidgets.QWidget, Ui_SignUp):
             username = self.lineEdit_username.text().strip()
             password = self.lineEdit_password.text().strip()
             self.connector.signup(username, password)
+            self.close()
