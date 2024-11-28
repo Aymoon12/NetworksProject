@@ -50,6 +50,12 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.actionConnect_to_Server.setEnabled(False)
             self.ConnectionWindow.close()
             QtWidgets.QMessageBox.information(self, "Connection", "You are now connected to the server")
+            # testing uploading
+            # self.connector.upload()
+            # testing download
+            # self.connector.download()
+            # testing deletion
+            # self.connector.delete_file()
     
     def open_connection_window(self):
         self.ConnectionWindow = ConnectToServer(self)
