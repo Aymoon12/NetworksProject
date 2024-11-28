@@ -4,7 +4,7 @@ import threading
 import sqlite3
 import os
 import hashlib
-
+import json
 
 IP = "localhost"
 PORT = 4450
@@ -13,6 +13,9 @@ SIZE = 1024
 FORMAT = 'utf-8'
 SERVER_PATH = "server"
 SEPERATOR = "@"
+BASE_PATH = "root"
+
+session = threading.local()
 
 
 def handle_client(conn, addr):
@@ -36,163 +39,245 @@ def handle_client(conn, addr):
     conn.close()
 
 
+def create_subfolder(path, name):
+    path_to_create = os.path.join(path, name)
+    os.makedirs(path_to_create)
+
+def check_valid_path(path):
+    return path.startswith("\\") or path.startswith("/") or ".." in path #mainly checks to prevent someone  trying to gather information about folders outside their user's folder
+
+def check_valid_file_name(name):
+    forbiddenchars = "/<>:\"/\\|?*"
+    return any(elem in name for elem in forbiddenchars) or check_valid_path(name)
+
+
+
 def check_user(conn, addr):
     while True:
         data = conn.recv(SIZE).decode(FORMAT)
         data = data.split("@")
         cmd = data[0]
 
-        if cmd == "SIGNUP":
-            username = data[1]
-            password = data[2]
-            print(f"Username: {username}")
-            print(f"Password: {password}")
+        match cmd:
+            case "SIGNUP":
+                username = data[1]
+                password = data[2]
+                print(f"Username: {username}")
+                print(f"Password: {password}")
 
-            check_user = "SELECT * FROM users WHERE username = ?"
-            val = (username,)
+                if(check_valid_file_name(username)):
+                    send_data = "400@BAD_REQUEST"
+                    conn.send(send_data.encode(FORMAT))
+                    continue
 
-            result = None
-            with sqlite3.connect("database.db") as db:
-                my_cursor = db.cursor()
-                my_cursor.execute(check_user, val)
 
-                result = my_cursor.fetchall()
-                my_cursor.close()
-            print(result)
-            if len(result) == 0:
+                check_user = "SELECT * FROM users WHERE username = ?"
+                val = (username,)
+
+                result = None
                 with sqlite3.connect("database.db") as db:
                     my_cursor = db.cursor()
-                    sql = "INSERT INTO users (username, password) VALUES (?, ?)"
-                    val = (username, hashlib.sha256(password.encode(FORMAT)).hexdigest())
-                    my_cursor.execute(sql, val)
-                    db.commit()
+                    my_cursor.execute(check_user, val)
+
+                    result = my_cursor.fetchall()
                     my_cursor.close()
-                send_data = "200@OK"
-                conn.send(send_data.encode(FORMAT))
-            else:
-                send_data = "403@FORBIDDEN"
-                conn.send(send_data.encode(FORMAT))
-        elif cmd == "LOGIN":
-            username = data[1]
-            password = data[2]
-
-            sql = "SELECT * FROM users WHERE username = ? AND password =?"
-
-            val = (username, hashlib.sha256(password.encode(FORMAT)).hexdigest())
-            result = None
-            with sqlite3.connect("database.db") as db:
-                my_cursor = db.cursor()
-                my_cursor.execute(sql, val)
-
-                result = my_cursor.fetchall()
-                my_cursor.close()
-
-            print(result)
-            if len(result) == 0:
-                send_data = "FAILED"
-                conn.send(f"{send_data}{SEPERATOR}{username}".encode(FORMAT))
-            else:
-                send_data = "SUCCESS"
-                conn.send(f"{send_data}{SEPERATOR}{username}".encode(FORMAT))
-        elif cmd == "UPLOAD":
-            write_file = False
-            if not os.path.isfile(data[1]):  # see if file already exists
-                write_file = True
-                conn.send("GOOD".encode(FORMAT))
-            else:  # if file exists then check if they want to overwrite
-                conn.send("OVERWRITE".encode(FORMAT))
-                response = conn.recv(SIZE).decode(FORMAT)
-                if response == "YES":
-                    write_file = True
+                print(result)
+                if len(result) == 0:
+                    with sqlite3.connect("database.db") as db:
+                        my_cursor = db.cursor()
+                        sql = "INSERT INTO users (username, password) VALUES (?, ?)"
+                        val = (username, hashlib.sha256(password.encode(FORMAT)).hexdigest())
+                        my_cursor.execute(sql, val)
+                        db.commit()
+                        my_cursor.close()
+                    create_subfolder(BASE_PATH, username)
+                    send_data = "200@OK"
+                    conn.send(send_data.encode(FORMAT))
                 else:
-                    write_file = False
+                    send_data = "403@FORBIDDEN"
+                    conn.send(send_data.encode(FORMAT))
+            case "LOGIN":
+                username = data[1]
+                password = data[2]
 
-            if write_file:  # create the new file and store data
-                nfile = open(data[1], "wb")
-                data = conn.recv(SIZE)  # after receive send conf
-                conn.send("OK".encode(FORMAT))
+                sql = "SELECT * FROM users WHERE username = ? AND password =?"
 
-                while data != "DONE".encode(FORMAT):
-                    nfile.write(data)
-                    data = conn.recv(SIZE)
+                val = (username, hashlib.sha256(password.encode(FORMAT)).hexdigest())
+                result = None
+                with sqlite3.connect("database.db") as db:
+                    my_cursor = db.cursor()
+                    my_cursor.execute(sql, val)
+
+                    result = my_cursor.fetchall()
+                    my_cursor.close()
+
+                print(result)
+                if len(result) == 0:
+                    send_data = "FAILED"
+                    conn.send(f"{send_data}{SEPERATOR}{username}".encode(FORMAT))
+                else:
+                    send_data = "SUCCESS"
+                    conn.send(f"{send_data}{SEPERATOR}{username}".encode(FORMAT))
+                    session.username = username                
+            case "UPLOAD":
+                if(session.username is None):
+                    send_data = "UNAUTHORIZED"
+                    conn.send(send_data.encode(FORMAT))
+                    continue
+
+                file_path = data[1]
+                if(check_valid_path(file_path)):
+                    send_data = "INVALID_FILE_PATH"
+                    conn.send(send_data.encode(FORMAT))
+                    continue
+
+                file_name = data[2]
+                if(check_valid_file_name(file_name)):
+                    send_data = "INVALID_FILE_NAME"
+                    conn.send(send_data.encode(FORMAT))
+                    continue
+
+                full_path = os.path.join(BASE_PATH,session.username,file_path,file_name)
+                
+                write_file = False
+                if not os.path.isfile(full_path):  # see if file already exists
+                    write_file = True
+                    conn.send("GOOD".encode(FORMAT))
+                else:  # if file exists then check if they want to overwrite
+                    conn.send("OVERWRITE".encode(FORMAT))
+                    response = conn.recv(SIZE).decode(FORMAT)
+                    if response == "YES":
+                        write_file = True
+                    else:
+                        write_file = False
+
+                if write_file:  # create the new file and store data
+                    nfile = open(full_path, "wb")
+                    data = conn.recv(SIZE)  # after receive send conf
                     conn.send("OK".encode(FORMAT))
-                nfile.close()
-                print("file received")
-        elif cmd == "DOWNLOAD":
-            path = data[1]  # receive path
-            send_data = True
-            if os.path.isfile(path):  # see if file exists in server
-                conn.send("OK".encode(FORMAT))  # let client know file has been found
-            else:
-                conn.send("NO".encode(FORMAT))
-                send_data = False
 
-            if send_data:
-                file = open(path, 'rb')
-                # bytes_sent = SIZE
-                data = file.read(SIZE)
-                conn.send(data)
-                while data and conn.recv(SIZE).decode(FORMAT) == "OK":
+                    while data != "DONE".encode(FORMAT):
+                        nfile.write(data)
+                        data = conn.recv(SIZE)
+                        conn.send("OK".encode(FORMAT))
+                    nfile.close()
+                    print("file received")
+            case "DOWNLOAD":
+                if(session.username is None):
+                    send_data = "UNAUTHORIZED"
+                    conn.send(send_data.encode(FORMAT))
+                    continue
+                path = data[1]
+                if(check_valid_path(path)):
+                    send_data = "INVALID_FILE_PATH"
+                    conn.send(send_data.encode(FORMAT))
+                    continue
+
+                full_path = os.path.join(BASE_PATH,session.username,path)
+                send_data = True
+                if os.path.isfile(full_path):  # see if file exists in server
+                    conn.send("OK".encode(FORMAT))  # let client know file has been found
+                else:
+                    conn.send("NO".encode(FORMAT))
+                    send_data = False
+
+                if send_data:
+                    file = open(full_path, 'rb')
+                    # bytes_sent = SIZE
                     data = file.read(SIZE)
                     conn.send(data)
-                conn.send("DONE".encode(FORMAT))
-                print("Server received file")
-                file.close()
-        elif cmd == "DELETE":
-            server_path = data[1]  # path to file that is to be deleted
-            if os.path.isfile(server_path):
-                os.remove(server_path)
-                conn.send("OK".encode(FORMAT))
-            else:
-                conn.send("NO".encode(FORMAT))
-        elif cmd == "CREATE_SUBFOLDER":
-            path = data[1]  # path passed in
-            subfolder_name = data[2]  # subfolder name passed in
-            path_to_create = os.path.join(path, subfolder_name)
-            if os.path.exists(path_to_create):
-                os.makedirs(path_to_create)
-                conn.send("CREATED".encode(FORMAT))
-            else:
-                conn.send("NO".encode(FORMAT))
+                    while data and conn.recv(SIZE).decode(FORMAT) == "OK":
+                        data = file.read(SIZE)
+                        conn.send(data)
+                    conn.send("DONE".encode(FORMAT))
+                    print("Server received file")
+                    file.close()
+            case "DELETE":
+                if(session.username is None):
+                    send_data = "UNAUTHORIZED"
+                    conn.send(send_data.encode(FORMAT))
+                    continue
+                server_path = data[1]
+                if(check_valid_path(path)):
+                    send_data = "INVALID_FILE_PATH"
+                    conn.send(send_data.encode(FORMAT))
+                    continue
 
-        elif cmd == "DELETE_SUBFOLDER":
-            path_to_delete = data[1]
-            if os.path.exists(path_to_delete):  # Checks if path to be deleted exists
-                os.rmdir(path_to_delete)
-                conn.send("DELETED".encode(FORMAT))
-            else:
-                conn.send("NO".encode(FORMAT))
-        elif cmd == "LIST_DIR":
+                full_path = os.path.join(BASE_PATH, session.username, server_path)
 
-            # Helper function
-            # Recursive function to list all files in directory then calls the function for every other directory
-            def list_files_and_directories(path, indent):
+                if os.path.isfile(server_path):
+                    os.remove(server_path)
+                    conn.send("OK".encode(FORMAT))
+                else:
+                    conn.send("NO".encode(FORMAT))
+            case "CREATE_SUBFOLDER":
+                if(session.username is None):
+                    send_data = "UNAUTHORIZED"
+                    conn.send(send_data.encode(FORMAT))
+                    continue
+                path = data[1]
+                subfolder_name = data[2]
+                if(check_valid_path(path) or check_valid_file_name(subfolder_name)):
+                    send_data = "INVALID_FILE_PATH"
+                    conn.send(send_data.encode(FORMAT))
+                    continue
+                path_to_create = os.path.join(BASE_PATH, session.username, path, subfolder_name)
+                try:
+                    create_subfolder(subfolder_name, path_to_create)
+                    conn.send("CREATED".encode(FORMAT))
+                except OSError:
+                    conn.send("NO".encode(FORMAT))
+            case "DELETE_SUBFOLDER":
+                if(session.username is None):
+                    send_data = "UNAUTHORIZED"
+                    conn.send(send_data.encode(FORMAT))
+                    continue
+                
+                path_to_delete = data[1]
+                if(check_valid_path(path_to_delete)):
+                    send_data = "INVALID_FILE_PATH"
+                    conn.send(send_data.encode(FORMAT))
+                    continue
+
+                full_path = os.path.join(BASE_PATH, session.username, path_to_delete)
+                if os.path.exists(path_to_delete):  # Checks if path to be deleted exists
+                    os.rmdir(path_to_delete)
+                    conn.send("DELETED".encode(FORMAT))
+                else:
+                    conn.send("NO".encode(FORMAT))
+            case "LIST_DIR":
+                if(session.username is None):
+                    send_data = "UNAUTHORIZED"
+                    conn.send(send_data.encode(FORMAT))
+                    continue
+                
+                path = data[1]
+                if(check_valid_path(path)):
+                    send_data = "INVALID_FILE_PATH"
+                    conn.send(send_data.encode(FORMAT))
+                    continue
+
+                full_path = os.path.join(BASE_PATH, session.username, path)
+                json_dict = None
                 try:
                     # Gets all files and directories
-                    items = os.listdir(path)
+                    items = os.listdir(full_path)
 
                     # Split files and directories into two different arrays
-                    files = [item for item in items if os.path.isfile(os.path.join(path, item))]
-                    directories = [item for item in items if os.path.isdir(os.path.join(path, item))]
+                    files = [item for item in items if os.path.isfile(os.path.join(full_path, item))]
+                    directories = [item for item in items if os.path.isdir(os.path.join(full_path, item))]
 
-                    print(f"{indent} Directory: {path}")
-                    if files:
-                        for file in files:
-                            print(f"{indent} -{file}")
-                    else:
-                        print(f"{indent} No Files")
-
-                    for directory in directories:
-                        next_path = os.path.join(path, directory)
-                        list_files_and_directories(next_path, indent + " ")
-
+                    jsondict = json.dumps({"Files": files, "Directories": directories})
+                    
                 except Exception as e:
-                    print(f"There was an error in listing the files in the path {path}: {e}")
+                    print(f"There was an error in listing the files in the path {full_path}: {e}")
                     conn.send("NO".encode(FORMAT))
-
-            root_directory = "root"
-            list_files_and_directories(root_directory, "")
-            conn.send("OK".encode(FORMAT))
+                    continue
+                
+                conn.send("OK".encode(FORMAT))
+                for data in [json_dict[i:i+1024] for i in range(0,len(json_dict), 1024)]: #incase you have an unreasonably long folder with files and subfolders with lengths longer than 1024 bytes
+                    conn.send(data.encode(FORMAT))
+                conn.send("DONE".encode(FORMAT))
 
 
 

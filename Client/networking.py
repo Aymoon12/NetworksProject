@@ -1,6 +1,7 @@
 import os
 import socket
 import tkinter
+import json
 
 from PySide6 import QtWidgets
 
@@ -54,7 +55,7 @@ class Connector():
         else:
             file_size = os.path.getsize(client_path)
             file_name = client_path.split("\\")[-1]
-            self.client.send(f"UPLOAD{SEPERATOR}{server_dir}\\{file_name}".encode(FORMAT))  # send path to file
+            self.client.send(f"UPLOAD{SEPERATOR}{server_dir}{SEPERATOR}{file_name}".encode(FORMAT))  # send path to file
 
             data = self.client.recv(SIZE).decode(FORMAT)
             send_file = True
@@ -121,8 +122,8 @@ class Connector():
         else:
             print("Subfolder could not be deleted.")
 
-    def list_all_files(self):
-        self.client.send(f"LIST_DIRECTORY{SEPERATOR}".encode(FORMAT))
+    def list_all_files(self, path):
+        self.client.send(f"LIST_DIRECTORY{SEPERATOR}{path}".encode(FORMAT))
         response = self.client.recv(SIZE).decode(FORMAT)
         if response == "OK":
             print("All files listed successfully.")
