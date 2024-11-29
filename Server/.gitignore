@@ -1,4 +1,5 @@
 venv/
+root/
 database.db
 database.db-shm
 database.db-wal

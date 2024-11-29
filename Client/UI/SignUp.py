@@ -26,26 +26,26 @@ class Ui_SignUp(object):
         SignUp.resize(400, 300)
         SignUp.setMinimumSize(QSize(400, 300))
         SignUp.setMaximumSize(QSize(400, 300))
-        self.widget = QWidget(SignUp)
-        self.widget.setObjectName(u"widget")
-        self.widget.setGeometry(QRect(0, 8, 401, 281))
-        self.horizontalLayout_2 = QHBoxLayout(self.widget)
+        self.layoutWidget = QWidget(SignUp)
+        self.layoutWidget.setObjectName(u"layoutWidget")
+        self.layoutWidget.setGeometry(QRect(0, 8, 401, 281))
+        self.horizontalLayout_2 = QHBoxLayout(self.layoutWidget)
         self.horizontalLayout_2.setObjectName(u"horizontalLayout_2")
         self.horizontalLayout_2.setContentsMargins(0, 0, 0, 0)
         self.horizontalSpacer_4 = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
         self.horizontalLayout_2.addItem(self.horizontalSpacer_4)
 
-        self.widget1 = QWidget(self.widget)
-        self.widget1.setObjectName(u"widget1")
-        self.verticalLayout = QVBoxLayout(self.widget1)
+        self.widget = QWidget(self.layoutWidget)
+        self.widget.setObjectName(u"widget")
+        self.verticalLayout = QVBoxLayout(self.widget)
         self.verticalLayout.setObjectName(u"verticalLayout")
-        self.label_3 = QLabel(self.widget1)
+        self.label_3 = QLabel(self.widget)
         self.label_3.setObjectName(u"label_3")
 
         self.verticalLayout.addWidget(self.label_3, 0, Qt.AlignHCenter)
 
-        self.lineEdit_username = QLineEdit(self.widget1)
+        self.lineEdit_username = QLineEdit(self.widget)
         self.lineEdit_username.setObjectName(u"lineEdit_username")
 
         self.verticalLayout.addWidget(self.lineEdit_username)
@@ -54,12 +54,12 @@ class Ui_SignUp(object):
 
         self.verticalLayout.addItem(self.horizontalSpacer_2)
 
-        self.label_2 = QLabel(self.widget1)
+        self.label_2 = QLabel(self.widget)
         self.label_2.setObjectName(u"label_2")
 
         self.verticalLayout.addWidget(self.label_2, 0, Qt.AlignHCenter)
 
-        self.lineEdit_password = QLineEdit(self.widget1)
+        self.lineEdit_password = QLineEdit(self.widget)
         self.lineEdit_password.setObjectName(u"lineEdit_password")
         self.lineEdit_password.setEchoMode(QLineEdit.Password)
 
@@ -69,12 +69,12 @@ class Ui_SignUp(object):
 
         self.verticalLayout.addItem(self.horizontalSpacer_3)
 
-        self.label = QLabel(self.widget1)
+        self.label = QLabel(self.widget)
         self.label.setObjectName(u"label")
 
         self.verticalLayout.addWidget(self.label, 0, Qt.AlignHCenter)
 
-        self.lineEdit_confirm = QLineEdit(self.widget1)
+        self.lineEdit_confirm = QLineEdit(self.widget)
         self.lineEdit_confirm.setObjectName(u"lineEdit_confirm")
         self.lineEdit_confirm.setEchoMode(QLineEdit.Password)
 
@@ -84,13 +84,13 @@ class Ui_SignUp(object):
 
         self.verticalLayout.addItem(self.horizontalSpacer)
 
-        self.pushButton = QPushButton(self.widget1)
+        self.pushButton = QPushButton(self.widget)
         self.pushButton.setObjectName(u"pushButton")
 
         self.verticalLayout.addWidget(self.pushButton)
 
 
-        self.horizontalLayout_2.addWidget(self.widget1)
+        self.horizontalLayout_2.addWidget(self.widget)
 
         self.horizontalSpacer_5 = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
@@ -106,7 +106,7 @@ class Ui_SignUp(object):
     # setupUi
 
     def retranslateUi(self, SignUp):
-        SignUp.setWindowTitle(QCoreApplication.translate("SignUp", u"Form", None))
+        SignUp.setWindowTitle(QCoreApplication.translate("SignUp", u"Sign Up", None))
         self.label_3.setText(QCoreApplication.translate("SignUp", u"Username", None))
         self.label_2.setText(QCoreApplication.translate("SignUp", u"Password", None))
         self.label.setText(QCoreApplication.translate("SignUp", u"Confirm Password", None))

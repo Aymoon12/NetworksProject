@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Form</string>
+   <string>Connect To Server</string>
   </property>
   <widget class="QWidget" name="layoutWidget">
    <property name="geometry">
@@ -47,7 +47,11 @@
         </widget>
        </item>
        <item>
-        <widget class="QLineEdit" name="lineEdit_IP"/>
+        <widget class="QLineEdit" name="lineEdit_IP">
+         <property name="text">
+          <string/>
+         </property>
+        </widget>
        </item>
        <item>
         <spacer name="horizontalSpacer_2">
@@ -70,7 +74,11 @@
         </widget>
        </item>
        <item>
-        <widget class="QLineEdit" name="lineEdit_port"/>
+        <widget class="QLineEdit" name="lineEdit_port">
+         <property name="text">
+          <string>4450</string>
+         </property>
+        </widget>
        </item>
        <item>
         <spacer name="horizontalSpacer">

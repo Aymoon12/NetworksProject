@@ -10,7 +10,7 @@ class SignUp(QtWidgets.QWidget, Ui_SignUp):
     
     def signup(self):
         if(self.lineEdit_password.text().strip() != self.lineEdit_confirm.text().strip()):
-            print("Passwords dont match")
+            QtWidgets.QMessageBox.critical(self, "ERROR", "Passwords don't match")
         else:
             username = self.lineEdit_username.text().strip()
             password = self.lineEdit_password.text().strip()

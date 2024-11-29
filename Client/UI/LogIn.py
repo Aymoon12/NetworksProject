@@ -91,7 +91,7 @@ class Ui_LogIn(object):
     # setupUi
 
     def retranslateUi(self, LogIn):
-        LogIn.setWindowTitle(QCoreApplication.translate("LogIn", u"Form", None))
+        LogIn.setWindowTitle(QCoreApplication.translate("LogIn", u"Log In", None))
         self.label_3.setText(QCoreApplication.translate("LogIn", u"Username", None))
         self.label_2.setText(QCoreApplication.translate("LogIn", u"Password", None))
         self.pushButton.setText(QCoreApplication.translate("LogIn", u"Log In", None))
