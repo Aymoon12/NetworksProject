@@ -88,7 +88,7 @@ def check_user(conn, addr):
                         my_cursor.execute(sql, val)
                         db.commit()
                         my_cursor.close()
-                    create_subfolder(BASE_PATH, username)
+                    os.makedirs(os.path.join(BASE_PATH, username))
                     send_data = "200@OK"
                     conn.send(send_data.encode(FORMAT))
                 else:
