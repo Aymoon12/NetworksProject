@@ -39,9 +39,7 @@ def handle_client(conn, addr):
     conn.close()
 
 
-def create_subfolder(path, name):
-    path_to_create = os.path.join(path, name)
-    os.makedirs(path_to_create)
+
 
 def check_valid_path(path):
     return path.startswith("\\") or path.startswith("/") or ".." in path #mainly checks to prevent someone  trying to gather information about folders outside their user's folder
@@ -152,15 +150,15 @@ def check_user(conn, addr):
                         write_file = False
 
                 if write_file:  # create the new file and store data
-                    nfile = open(full_path, "wb")
-                    data = conn.recv(SIZE)  # after receive send conf
-                    conn.send("OK".encode(FORMAT))
-
-                    while data != "DONE".encode(FORMAT):
-                        nfile.write(data)
-                        data = conn.recv(SIZE)
+                    with open(full_path, "wb") as nfile:
+                        data = conn.recv(SIZE)  # after receive send conf
                         conn.send("OK".encode(FORMAT))
-                    nfile.close()
+
+                        while data != "DONE".encode(FORMAT):
+                            nfile.write(data)
+                            data = conn.recv(SIZE)
+                            conn.send("OK".encode(FORMAT))
+
                     print("file received")
             case "DOWNLOAD":
                 if(session.username is None):
@@ -176,22 +174,23 @@ def check_user(conn, addr):
                 full_path = os.path.join(BASE_PATH,session.username,path)
                 send_data = True
                 if os.path.isfile(full_path):  # see if file exists in server
-                    conn.send("OK".encode(FORMAT))  # let client know file has been found
+                    file_size = os.path.getsize(full_path)
+                    conn.send(f"OK{SEPERATOR}{file_size}".encode(FORMAT))  # let client know file has been found
                 else:
                     conn.send("NO".encode(FORMAT))
                     send_data = False
 
                 if send_data:
-                    file = open(full_path, 'rb')
-                    # bytes_sent = SIZE
-                    data = file.read(SIZE)
-                    conn.send(data)
-                    while data and conn.recv(SIZE).decode(FORMAT) == "OK":
+                    with open(full_path, 'rb') as file:
+                        # bytes_sent = SIZE
                         data = file.read(SIZE)
                         conn.send(data)
-                    conn.send("DONE".encode(FORMAT))
-                    print("Server received file")
-                    file.close()
+                        while data and conn.recv(SIZE).decode(FORMAT) == "OK":
+                            data = file.read(SIZE)
+                            conn.send(data)
+                        conn.send("DONE".encode(FORMAT))
+                        print("Server received file")
+                        
             case "DELETE":
                 if(session.username is None):
                     send_data = "UNAUTHORIZED"
@@ -205,8 +204,11 @@ def check_user(conn, addr):
 
                 full_path = os.path.join(BASE_PATH, session.username, server_path)
 
-                if os.path.isfile(server_path):
-                    os.remove(server_path)
+                if os.path.isfile(full_path):
+                    os.remove(full_path)
+                    conn.send("OK".encode(FORMAT))
+                elif os.path.isdir(full_path):
+                    os.rmdir(full_path)
                     conn.send("OK".encode(FORMAT))
                 else:
                     conn.send("NO".encode(FORMAT))
@@ -223,28 +225,11 @@ def check_user(conn, addr):
                     continue
                 path_to_create = os.path.join(BASE_PATH, session.username, path, subfolder_name)
                 try:
-                    create_subfolder(subfolder_name, path_to_create)
+                    os.makedirs(path_to_create)
                     conn.send("CREATED".encode(FORMAT))
                 except OSError:
                     conn.send("NO".encode(FORMAT))
-            case "DELETE_SUBFOLDER":
-                if(session.username is None):
-                    send_data = "UNAUTHORIZED"
-                    conn.send(send_data.encode(FORMAT))
-                    continue
-                
-                path_to_delete = data[1]
-                if(check_valid_path(path_to_delete)):
-                    send_data = "INVALID_FILE_PATH"
-                    conn.send(send_data.encode(FORMAT))
-                    continue
-
-                full_path = os.path.join(BASE_PATH, session.username, path_to_delete)
-                if os.path.exists(path_to_delete):  # Checks if path to be deleted exists
-                    os.rmdir(path_to_delete)
-                    conn.send("DELETED".encode(FORMAT))
-                else:
-                    conn.send("NO".encode(FORMAT))
+                    
             case "LIST_DIR":
                 if(session.username is None):
                     send_data = "UNAUTHORIZED"
@@ -267,7 +252,7 @@ def check_user(conn, addr):
                     files = [item for item in items if os.path.isfile(os.path.join(full_path, item))]
                     directories = [item for item in items if os.path.isdir(os.path.join(full_path, item))]
 
-                    jsondict = json.dumps({"Files": files, "Directories": directories})
+                    json_dict = json.dumps({"Files": files, "Directories": directories}).encode(FORMAT)
                     
                 except Exception as e:
                     print(f"There was an error in listing the files in the path {full_path}: {e}")
@@ -275,8 +260,11 @@ def check_user(conn, addr):
                     continue
                 
                 conn.send("OK".encode(FORMAT))
-                for data in [json_dict[i:i+1024] for i in range(0,len(json_dict), 1024)]: #incase you have an unreasonably long folder with files and subfolders with lengths longer than 1024 bytes
-                    conn.send(data.encode(FORMAT))
+                for data in [json_dict[i:i+SIZE] for i in range(0,len(json_dict), SIZE)]: #incase you have an unreasonably long folder with files and subfolders with lengths longer than 1024 bytes
+                    resp = conn.recv(SIZE).decode(FORMAT)
+                    if resp != "OK":
+                        break
+                    conn.send(data)
                 conn.send("DONE".encode(FORMAT))
 
 

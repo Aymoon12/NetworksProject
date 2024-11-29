@@ -1,14 +1,77 @@
 import os
 import socket
-import tkinter
 import json
+import time
 
-from PySide6 import QtWidgets
+from PySide6 import QtWidgets, QtCore
+qm = QtWidgets.QMessageBox
 
 SIZE = 1024
 FORMAT = 'utf-8'
 SEPERATOR = "@"
 
+def check_invalid_query(data):
+    match data:
+        case "UNAUTHORIZED":
+            raise ValueError("Unauthorized Connection")
+        case "INVALID_FILE_PATH":
+            raise ValueError("Invalid File Path")
+        case "INVALID_FILE_NAME":
+            raise ValueError("Invalid File Name")
+
+class Uploader(QtCore.QObject):
+    finished = QtCore.Signal()
+    progress = QtCore.Signal(int)
+    def __init__(self, client, client_path):
+        super().__init__()
+        self.client = client
+        self.client_path = client_path
+
+    def run(self):
+        with open(self.client_path, 'rb') as file:
+            data = file.read(SIZE)
+            self.client.send(data)
+            bytes_sent = SIZE
+            self.progress.emit(bytes_sent)
+            timer = QtCore.QTimer()
+            timer.timeout.connect(self, lambda: self.progress.emit(bytes_sent))
+            timer.start(100)
+            while data and self.client.recv(SIZE).decode(FORMAT) == "OK":
+                data = file.read(SIZE)
+                self.client.send(data)
+                bytes_sent += SIZE
+                QtCore.QCoreApplication.processEvents()
+            self.client.send("DONE".encode(FORMAT))
+            self.client.recv(SIZE) #since the server still replies OK one last time
+        self.finished.emit()
+
+class Downloader(QtCore.QObject):
+    finished = QtCore.Signal()
+    progress = QtCore.Signal(int)
+    def __init__(self, client, local_path, server_path):
+        super().__init__()
+        self.client = client
+        self.local_path = local_path
+        self.server_path = server_path
+
+    def run(self):
+        with open(os.path.join(self.local_path, os.path.basename(self.server_path)), "wb") as nfile:
+            data = self.client.recv(SIZE)  # after receive send conf
+            self.client.send("OK".encode(FORMAT))
+
+            bytes_recvd = SIZE
+            self.progress.emit(bytes_recvd)
+            curSec = time.time()
+
+            while data != "DONE".encode(FORMAT):
+                nfile.write(data)
+                data = self.client.recv(SIZE)
+                self.client.send("OK".encode(FORMAT))
+                bytes_recvd += SIZE
+                if time.time() > curSec + 0.1:
+                    curSec = time.time()
+                    self.progress.emit(bytes_recvd)
+        self.finished.emit()
 
 class Connector():
     def __init__(self, parent, ip, port):
@@ -23,11 +86,10 @@ class Connector():
 
         self.client.send(f"SIGNUP{SEPERATOR}{username}{SEPERATOR}{password}".encode(FORMAT))
         data = self.client.recv(SIZE).decode(FORMAT)
-        print(data)
         cmd, msg = data.split(SEPERATOR)
 
         if cmd != "200":
-            QtWidgets.QMessageBox.information(self.parent, "User exists", "User already exists. Please login.")
+            qm.information(self.parent, "User exists", "User already exists. Please login.")
 
         self.login(username, password)
 
@@ -38,117 +100,111 @@ class Connector():
         cmd, msg = data.split(SEPERATOR)
 
         if cmd == "FAILED":
-            print("Failed to authenticate user. Goodbye.")
+            qm.critical(self.parent, "ERROR", "Failed to authenticate user.")
         else:
-            QtWidgets.QMessageBox.information(self.parent, "Success", "You are now logged in")
+            qm.information(self.parent, "Success", "You are now logged in")
             self.authenticated = True
+            self.parent.actionSign_Up.setEnabled(False)
+            self.parent.actionLog_In.setEnabled(False)
+            self.parent.actionUploadFile.setEnabled(True)
+            self.parent.actionCreateSubfolder.setEnabled(True)
+            self.parent.set_path(self.parent.get_path())
 
-    def upload(self):
-        client_path = r""  # get users path
-        ext = client_path.split('.')
+    def upload(self, client_path, server_dir):
+        
+        #ext = client_path.split('.')
 
-        server_dir = "root"  # dir to store file
+        file_size = os.path.getsize(client_path)
+        file_name = client_path.split("/")[-1]
+        self.client.send(f"UPLOAD{SEPERATOR}{server_dir}{SEPERATOR}{file_name}".encode(FORMAT))  # send path to file
 
-        if len(ext) < 2:
-            # error
-            pass
-        else:
-            file_size = os.path.getsize(client_path)
-            file_name = client_path.split("\\")[-1]
-            self.client.send(f"UPLOAD{SEPERATOR}{server_dir}{SEPERATOR}{file_name}".encode(FORMAT))  # send path to file
-
-            data = self.client.recv(SIZE).decode(FORMAT)
-            send_file = True
-            if data == "OVERWRITE":  # prompt if they want to overwrite
-                print("overwrite")
-                # if yes then:
+        data = self.client.recv(SIZE).decode(FORMAT)
+        check_invalid_query(data)
+        send_file = True
+        if data == "OVERWRITE":  # prompt if they want to overwrite
+            
+            
+            ret = qm.question(self.parent, 'Confirm', "A file already exists on the server at this path, do you want to overwrite it?", qm.Yes | qm.No)
+            if ret == qm.Yes:
                 self.client.send("YES".encode(FORMAT))
                 send_file = True
-                # else
-                # self.client.send("NO".encode(FORMAT))
-                # send_file = False
+            else:
+                self.client.send("NO".encode(FORMAT))
+                send_file = False
+            
 
-            if send_file:
-                file = open(client_path, 'rb')
-                # bytes_sent = SIZE
-                data = file.read(SIZE)
-                self.client.send(data)
-                while data and self.client.recv(SIZE).decode(FORMAT) == "OK":
-                    data = file.read(SIZE)
-                    self.client.send(data)
-                self.client.send("DONE".encode(FORMAT))
-                print("Server received file")
-                file.close()
 
-    def download(self):
-        server_path = r""  # path to file in server
+        if send_file:
+            self.parent.open_progress_window(file_size)
+            self.parent.setEnabled(False)
+            self.thread = QtCore.QThread()
+            self.worker = Uploader(self.client, client_path)
+            self.worker.moveToThread(self.thread)
+            self.thread.started.connect(self.worker.run)
+            self.worker.finished.connect(self.thread.quit)
+            self.worker.finished.connect(self.worker.deleteLater)
+            self.thread.finished.connect(self.thread.deleteLater)
+            self.thread.finished.connect(self.parent.ProgressWindow.close)
+            self.thread.finished.connect(lambda: self.parent.setEnabled(True))
+            self.thread.finished.connect(lambda: self.parent.set_path(self.parent.get_path())) #resets the file list so the file is added in the file list
+            self.worker.progress.connect(self.parent.ProgressWindow.setProgress)
+            self.thread.start()
+            
+
+    def download(self, local_path, server_path):
         self.client.send(f"DOWNLOAD{SEPERATOR}{server_path}".encode(FORMAT))
         response = self.client.recv(SIZE).decode(FORMAT)
-        if response == "OK":
-            client_path = r"C:\Users\morbi\Downloads"
-            nfile = open(client_path + "\\" + os.path.basename(server_path), "wb")
-            data = self.client.recv(SIZE)  # after receive send conf
-            self.client.send("OK".encode(FORMAT))
+        check_invalid_query(response)
+        if response.startswith("OK"):
+            file_size = int(response.split('@')[1])
+            self.parent.open_progress_window(file_size, "Downloading")
+            self.parent.setEnabled(False)
+            self.thread = QtCore.QThread()
+            self.worker = Downloader(self.client, local_path, server_path)
+            self.worker.moveToThread(self.thread)
+            self.thread.started.connect(self.worker.run)
+            self.worker.finished.connect(self.thread.quit)
+            self.worker.finished.connect(self.worker.deleteLater)
+            self.thread.finished.connect(self.thread.deleteLater)
+            self.thread.finished.connect(self.parent.ProgressWindow.close)
+            self.thread.finished.connect(lambda: self.parent.setEnabled(True))
+            self.worker.progress.connect(self.parent.ProgressWindow.setProgress)
+            self.thread.start()
 
-            while data != "DONE".encode(FORMAT):
-                nfile.write(data)
-                data = self.client.recv(SIZE)
-                self.client.send("OK".encode(FORMAT))
-            nfile.close()
-            print("file received")
-
-    def delete_file(self):
-        server_path = ""
+    def delete_file(self, server_path):
         self.client.send(f"DELETE{SEPERATOR}{server_path}".encode(FORMAT))
         response = self.client.recv(SIZE).decode(FORMAT)
+        check_invalid_query(response)
         if response == "OK":
-            print("File deleted from server.")
+            self.parent.set_path(self.parent.get_path())
         else:
-            print("File could not be removed.")
+            qm.critical(self.parent, "ERROR", "File/Subfolder could not be deleted")
 
     def create_subfolder(self, subfolder_name, path):
         self.client.send(f"CREATE_SUBFOLDER{SEPERATOR}{path}{SEPERATOR}{subfolder_name}".encode(FORMAT))
         response = self.client.recv(SIZE).decode(FORMAT)
+        check_invalid_query(response)
         if response == "CREATED":
-            print("Subfolder created successfully.")
+            self.parent.set_path(self.parent.get_path())
         else:
-            print("Subfolder could not be created. Path does not exist.")
+            qm.critical(self.parent, "ERROR", "Subfolder could not be created")
 
-    def delete_subfolder(self, path_to_delete):
-        self.client.send(f"DELETE{SEPERATOR}{path_to_delete}".encode(FORMAT))
-        response = self.client.recv(SIZE).decode(FORMAT)
-        if response == "OK":
-            print("Subfolder deleted successfully.")
-        else:
-            print("Subfolder could not be deleted.")
 
     def list_all_files(self, path):
-        self.client.send(f"LIST_DIRECTORY{SEPERATOR}{path}".encode(FORMAT))
+        self.client.send(f"LIST_DIR{SEPERATOR}{path}".encode(FORMAT))
         response = self.client.recv(SIZE).decode(FORMAT)
+        check_invalid_query(response)
         if response == "OK":
-            print("All files listed successfully.")
+            self.client.send("OK".encode(FORMAT))
+            json = b''
+            data = self.client.recv(SIZE)
+            while(data != "DONE".encode(FORMAT)):
+                json += data
+                data = self.client.recv(SIZE)
+                self.client.send("OK".encode(FORMAT))
+            return json.decode(FORMAT)
         else:
-            print("Files could not all be listed.")
+            raise FileNotFoundError()
 
 
-"""    while authenticated:
-        data = client.recv(SIZE).decode(FORMAT)
-        cmd, msg = data.split('@')
-        if cmd == "OK":
-            print(f"{msg}")
-        elif cmd == "DISCONNECTED":
-            print(f"{msg}")
-            break
 
-        data = input("> ")
-        data = data.split(" ")
-        cmd = data[0]
-
-        if cmd == "TASK":
-            client.send(cmd.encode(FORMAT))
-        elif cmd == "LOGOUT":
-            client.send(cmd.encode(FORMAT))
-            break
-
-    print("Disconnected from the server. ")
-    client.close()"""

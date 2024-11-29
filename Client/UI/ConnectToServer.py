@@ -88,9 +88,11 @@ class Ui_ConnectToServer(object):
     # setupUi
 
     def retranslateUi(self, ConnectToServer):
-        ConnectToServer.setWindowTitle(QCoreApplication.translate("ConnectToServer", u"Form", None))
+        ConnectToServer.setWindowTitle(QCoreApplication.translate("ConnectToServer", u"Connect To Server", None))
         self.label_3.setText(QCoreApplication.translate("ConnectToServer", u"IP", None))
+        self.lineEdit_IP.setText(QCoreApplication.translate("ConnectToServer", u"localhost", None))
         self.label_2.setText(QCoreApplication.translate("ConnectToServer", u"Port", None))
+        self.lineEdit_port.setText(QCoreApplication.translate("ConnectToServer", u"4450", None))
         self.pushButton.setText(QCoreApplication.translate("ConnectToServer", u"Connect", None))
     # retranslateUi
 
