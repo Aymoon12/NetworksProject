@@ -7,20 +7,16 @@ class Progress(QtWidgets.QWidget, Ui_Progress):
         self.setupUi(self)
         self.labelType.setText(type)
         self.exp = 0
-        while amount > 1024:
-            amount /= 1024
-            self.exp += 1
-        self.progressBar.setMaximum(amount)
+        self.amount = amount / 1024
+        self.progressBar.setMaximum(10000)
 
     def setProgress(self, progress):
         #self.progressBar.setValue(progress / (1024 ** self.exp))
-        if(progress > 1024 * 1024 * 1024):
-            self.labelKb.setText("%.2f" % (progress / (1024 * 1024 * 1024)) + " GB")
-        elif progress > 1024 * 1024:
-            self.labelKb.setText("%.2f" % (progress / (1024 * 1024)) + " MB")
+        if(progress > 1024 * 1024):
+            self.labelKb.setText("%.2f" % (progress / (1024 * 1024)) + " GB")
+        elif progress > 1024:
+            self.labelKb.setText("%.2f" % (progress / (1024)) + " MB")
         else:
-            self.labelKb.setText("%.2f" % (progress / (1024 * 1024 * 1024)) + " KB")
+            self.labelKb.setText("%.2f" % (progress) + " KB")
         
-        for _ in range(self.exp):
-            progress /= 1024
-        self.progressBar.setValue(progress)
+        self.progressBar.setValue(int((progress / self.amount) * 10000))

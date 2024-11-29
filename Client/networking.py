@@ -31,15 +31,15 @@ class Uploader(QtCore.QObject):
         with open(self.client_path, 'rb') as file:
             data = file.read(SIZE)
             self.client.send(data)
-            bytes_sent = SIZE
-            self.progress.emit(bytes_sent)
+            kb_sent = 1
+            self.progress.emit(kb_sent)
             timer = QtCore.QTimer()
-            timer.timeout.connect(self, lambda: self.progress.emit(bytes_sent))
+            timer.timeout.connect(self, lambda: self.progress.emit(kb_sent))
             timer.start(100)
             while data and self.client.recv(SIZE).decode(FORMAT) == "OK":
                 data = file.read(SIZE)
                 self.client.send(data)
-                bytes_sent += SIZE
+                kb_sent += 1
                 QtCore.QCoreApplication.processEvents()
             self.client.send("DONE".encode(FORMAT))
             self.client.recv(SIZE) #since the server still replies OK one last time
@@ -59,18 +59,18 @@ class Downloader(QtCore.QObject):
             data = self.client.recv(SIZE)  # after receive send conf
             self.client.send("OK".encode(FORMAT))
 
-            bytes_recvd = SIZE
-            self.progress.emit(bytes_recvd)
+            kb_recvd = 1
+            self.progress.emit(kb_recvd)
             curSec = time.time()
 
             while data != "DONE".encode(FORMAT):
                 nfile.write(data)
                 data = self.client.recv(SIZE)
                 self.client.send("OK".encode(FORMAT))
-                bytes_recvd += SIZE
+                kb_recvd += 1
                 if time.time() > curSec + 0.1:
                     curSec = time.time()
-                    self.progress.emit(bytes_recvd)
+                    self.progress.emit(kb_recvd)
         self.finished.emit()
 
 class Connector():

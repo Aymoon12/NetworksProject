@@ -42,7 +42,7 @@ def handle_client(conn, addr):
 
 
 def check_valid_path(path):
-    return path.startswith("\\") or path.startswith("/") or ".." in path #mainly checks to prevent someone  trying to gather information about folders outside their user's folder
+    return path.startswith("\\") or path.startswith("/") or ".." in path or ":\\" in path #mainly checks to prevent someone  trying to gather information about folders outside their user's folder
 
 def check_valid_file_name(name):
     forbiddenchars = "/<>:\"/\\|?*"
@@ -58,7 +58,7 @@ def check_user(conn, addr):
 
         match cmd:
             case "SIGNUP":
-                username = data[1]
+                username = data[1].lower()
                 password = data[2]
                 print(f"Username: {username}")
                 print(f"Password: {password}")
@@ -95,7 +95,7 @@ def check_user(conn, addr):
                     send_data = "403@FORBIDDEN"
                     conn.send(send_data.encode(FORMAT))
             case "LOGIN":
-                username = data[1]
+                username = data[1].lower()
                 password = data[2]
 
                 sql = "SELECT * FROM users WHERE username = ? AND password =?"
@@ -204,13 +204,17 @@ def check_user(conn, addr):
 
                 full_path = os.path.join(BASE_PATH, session.username, server_path)
 
-                if os.path.isfile(full_path):
-                    os.remove(full_path)
-                    conn.send("OK".encode(FORMAT))
-                elif os.path.isdir(full_path):
-                    os.rmdir(full_path)
-                    conn.send("OK".encode(FORMAT))
-                else:
+                try:
+                    if os.path.isfile(full_path):
+                        os.remove(full_path)
+                        conn.send("OK".encode(FORMAT))
+                        continue
+                    if os.path.isdir(full_path):
+                        os.rmdir(full_path)
+                        conn.send("OK".encode(FORMAT))
+                        continue
+                    raise OSError
+                except OSError:
                     conn.send("NO".encode(FORMAT))
             case "CREATE_SUBFOLDER":
                 if(session.username is None):
