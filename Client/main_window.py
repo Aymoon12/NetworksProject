@@ -72,7 +72,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if event.type() == QtCore.QEvent.ContextMenu and source is self.listWidget:
             menu = QtWidgets.QMenu()
             item = source.itemAt(event.pos())
-            if(item.isDirectory):
+            if item is None:
+                return True
+            if(item.isDirectory and item.text() != ".."):
                 action = QAction(self)
                 action.setText("Open Folder")
                 action.triggered.connect(lambda: self.open_folder(item))
@@ -81,7 +83,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 action.setText("Delete Folder")
                 action.triggered.connect(lambda: self.delete_file(item))
                 menu.addAction(action)
-            else:
+            elif item.text() != "..":
                 action = QAction(self)
                 action.setText("Download File")
                 action.triggered.connect(lambda: self.download_file(item))
