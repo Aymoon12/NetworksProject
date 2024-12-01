@@ -5,6 +5,12 @@ import sqlite3
 import os
 import hashlib
 import json
+import time
+import pandas as pd
+
+upload_stats_df = pd.DataFrame(columns=['username', 'file_name', 'file_size', 'upload_rate', 'transfer_time', 'system_response_time', 'timestamp'])
+download_stats_df = pd.DataFrame(columns=['username', 'file_name', 'file_size', 'download_rate', 'transfer_time', 'system_response_time', 'timestamp'])
+
 
 IP = "localhost"
 PORT = 4450
@@ -15,7 +21,39 @@ SERVER_PATH = "server"
 SEPERATOR = "@"
 BASE_PATH = "root"
 
+
 session = threading.local()
+
+
+def save_upload_stats(username, file_name, file_size, upload_rate, transfer_time, system_response_time):
+    global upload_stats_df
+    timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
+    upload_stats_df = upload_stats_df.append({
+        'username': username,
+        'file_name': file_name,
+        'file_size': file_size,
+        'upload_rate': upload_rate,
+        'transfer_time': transfer_time,
+        'system_response_time': system_response_time,
+        'timestamp': timestamp
+    }, ignore_index=True)
+
+def save_download_stats(username, file_name, file_size, download_rate, transfer_time, system_response_time):
+    global download_stats_df
+    timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
+    download_stats_df = download_stats_df.append({
+        'username': username,
+        'file_name': file_name,
+        'file_size': file_size,
+        'download_rate': download_rate,
+        'transfer_time': transfer_time,
+        'system_response_time': system_response_time,
+        'timestamp': timestamp
+    }, ignore_index=True)
+
+def save_stats_to_csv():
+    upload_stats_df.to_csv('upload_stats.csv', index=False)
+    download_stats_df.to_csv('download_stats.csv', index=False)
 
 
 def handle_client(conn, addr):
@@ -118,6 +156,7 @@ def check_user(conn, addr):
                     conn.send(f"{send_data}{SEPERATOR}{username}".encode(FORMAT))
                     session.username = username                
             case "UPLOAD":
+
                 if(session.username is None):
                     send_data = "UNAUTHORIZED"
                     conn.send(send_data.encode(FORMAT))
@@ -149,7 +188,8 @@ def check_user(conn, addr):
                     else:
                         write_file = False
 
-                if write_file:  # create the new file and store data
+                if write_file:
+                    start_time = time.time()# create the new file and store data
                     with open(full_path, "wb") as nfile:
                         data = conn.recv(SIZE)  # after receive send conf
                         conn.send("OK".encode(FORMAT))
@@ -158,6 +198,14 @@ def check_user(conn, addr):
                             nfile.write(data)
                             data = conn.recv(SIZE)
                             conn.send("OK".encode(FORMAT))
+
+                    end_time = time.time()
+                    file_size = os.path.getsize(full_path)
+                    transfer_time = end_time - start_time
+                    upload_rate = file_size / transfer_time
+                    system_response_time = end_time - start_time
+                    save_upload_stats(session.username, file_name, file_size, upload_rate, transfer_time,
+                                      system_response_time)
 
                     print("file received")
             case "DOWNLOAD":
@@ -176,6 +224,7 @@ def check_user(conn, addr):
                 if os.path.isfile(full_path):  # see if file exists in server
                     file_size = os.path.getsize(full_path)
                     conn.send(f"OK{SEPERATOR}{file_size}".encode(FORMAT))  # let client know file has been found
+                    start_time = time.time()
                 else:
                     conn.send("NO".encode(FORMAT))
                     send_data = False
@@ -188,7 +237,15 @@ def check_user(conn, addr):
                         while data and conn.recv(SIZE).decode(FORMAT) == "OK":
                             data = file.read(SIZE)
                             conn.send(data)
+
                         conn.send("DONE".encode(FORMAT))
+
+                        end_time = time.time()
+                        transfer_time = end_time - start_time
+                        download_rate = file_size / transfer_time
+                        system_response_time = end_time - start_time  # Simplified for now
+                        save_download_stats(session.username, os.path.basename(full_path), file_size, download_rate,
+                                            transfer_time, system_response_time)
                         print("Server received file")
                         
             case "DELETE":
@@ -305,3 +362,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    save_stats_to_csv()

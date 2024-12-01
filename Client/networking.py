@@ -111,19 +111,14 @@ class Connector():
             self.parent.set_path(self.parent.get_path())
 
     def upload(self, client_path, server_dir):
-        
         #ext = client_path.split('.')
-
         file_size = os.path.getsize(client_path)
         file_name = client_path.split("/")[-1]
         self.client.send(f"UPLOAD{SEPERATOR}{server_dir}{SEPERATOR}{file_name}".encode(FORMAT))  # send path to file
-
         data = self.client.recv(SIZE).decode(FORMAT)
         check_invalid_query(data)
         send_file = True
         if data == "OVERWRITE":  # prompt if they want to overwrite
-            
-            
             ret = qm.question(self.parent, 'Confirm', "A file already exists on the server at this path, do you want to overwrite it?", qm.Yes | qm.No)
             if ret == qm.Yes:
                 self.client.send("YES".encode(FORMAT))
@@ -131,8 +126,6 @@ class Connector():
             else:
                 self.client.send("NO".encode(FORMAT))
                 send_file = False
-            
-
 
         if send_file:
             self.parent.open_progress_window(file_size)
@@ -149,7 +142,6 @@ class Connector():
             self.thread.finished.connect(lambda: self.parent.set_path(self.parent.get_path())) #resets the file list so the file is added in the file list
             self.worker.progress.connect(self.parent.ProgressWindow.setProgress)
             self.thread.start()
-            
 
     def download(self, local_path, server_path):
         self.client.send(f"DOWNLOAD{SEPERATOR}{server_path}".encode(FORMAT))
