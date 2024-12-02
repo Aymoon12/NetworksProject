@@ -3,3 +3,5 @@ root/
 database.db
 database.db-shm
 database.db-wal
+*.csv
+__pycache__
