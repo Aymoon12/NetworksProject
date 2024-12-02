@@ -5,6 +5,7 @@ import sqlite3
 import os
 import hashlib
 import json
+from Network_Analytics import *
 
 IP = "localhost"
 PORT = 4450
@@ -18,7 +19,7 @@ BASE_PATH = "root"
 session = threading.local()
 
 
-def handle_client(conn, addr):
+def handle_client(conn, addr):  # handles client connections
     print(f"New connection from {addr}")
     conn.send("OK@Welcome to the server".encode(FORMAT))
 
@@ -39,35 +40,33 @@ def handle_client(conn, addr):
     conn.close()
 
 
+def check_valid_path(
+        path):  # mainly checks to prevent someone  trying to gather information about folders outside their user's folder
+    return path.startswith("\\") or path.startswith("/") or ".." in path or ":\\" in path
 
-
-def check_valid_path(path):
-    return path.startswith("\\") or path.startswith("/") or ".." in path or ":\\" in path #mainly checks to prevent someone  trying to gather information about folders outside their user's folder
 
 def check_valid_file_name(name):
     forbiddenchars = "/<>:\"/\\|?*"
     return any(elem in name for elem in forbiddenchars) or check_valid_path(name)
 
 
-
-def check_user(conn, addr):
+def check_user(conn, addr):  # controls what action the client performs
     while True:
         data = conn.recv(SIZE).decode(FORMAT)
         data = data.split("@")
         cmd = data[0]
 
         match cmd:
-            case "SIGNUP":
+            case "SIGNUP":  # creates a new user and stores it in the database
                 username = data[1].lower()
                 password = data[2]
                 print(f"Username: {username}")
                 print(f"Password: {password}")
 
-                if(check_valid_file_name(username)):
+                if (check_valid_file_name(username)):
                     send_data = "400@BAD_REQUEST"
                     conn.send(send_data.encode(FORMAT))
                     continue
-
 
                 check_user = "SELECT * FROM users WHERE username = ?"
                 val = (username,)
@@ -116,27 +115,28 @@ def check_user(conn, addr):
                 else:
                     send_data = "SUCCESS"
                     conn.send(f"{send_data}{SEPERATOR}{username}".encode(FORMAT))
-                    session.username = username                
+                    session.username = username
             case "UPLOAD":
-                if(session.username is None):
+
+                if (session.username is None):
                     send_data = "UNAUTHORIZED"
                     conn.send(send_data.encode(FORMAT))
                     continue
 
                 file_path = data[1]
-                if(check_valid_path(file_path)):
+                if (check_valid_path(file_path)):
                     send_data = "INVALID_FILE_PATH"
                     conn.send(send_data.encode(FORMAT))
                     continue
 
                 file_name = data[2]
-                if(check_valid_file_name(file_name)):
+                if (check_valid_file_name(file_name)):
                     send_data = "INVALID_FILE_NAME"
                     conn.send(send_data.encode(FORMAT))
                     continue
 
-                full_path = os.path.join(BASE_PATH,session.username,file_path,file_name)
-                
+                full_path = os.path.join(BASE_PATH, session.username, file_path, file_name)
+
                 write_file = False
                 if not os.path.isfile(full_path):  # see if file already exists
                     write_file = True
@@ -149,7 +149,8 @@ def check_user(conn, addr):
                     else:
                         write_file = False
 
-                if write_file:  # create the new file and store data
+                if write_file:
+                    start_time = time.time()  # create the new file and store data
                     with open(full_path, "wb") as nfile:
                         data = conn.recv(SIZE)  # after receive send conf
                         conn.send("OK".encode(FORMAT))
@@ -159,45 +160,62 @@ def check_user(conn, addr):
                             data = conn.recv(SIZE)
                             conn.send("OK".encode(FORMAT))
 
+                    end_time = time.time()
+                    file_size = os.path.getsize(full_path) * (1e-6)
+                    transfer_time = end_time - start_time
+                    upload_rate = file_size / transfer_time
+                    system_response_time = end_time - start_time
+                    save_upload_stats(session.username, file_name, file_size, upload_rate, transfer_time,
+                                      system_response_time)
+
                     print("file received")
             case "DOWNLOAD":
-                if(session.username is None):
+                if (session.username is None):
                     send_data = "UNAUTHORIZED"
                     conn.send(send_data.encode(FORMAT))
                     continue
                 path = data[1]
-                if(check_valid_path(path)):
+                if (check_valid_path(path)):
                     send_data = "INVALID_FILE_PATH"
                     conn.send(send_data.encode(FORMAT))
                     continue
 
-                full_path = os.path.join(BASE_PATH,session.username,path)
+                full_path = os.path.join(BASE_PATH, session.username, path)
                 send_data = True
                 if os.path.isfile(full_path):  # see if file exists in server
                     file_size = os.path.getsize(full_path)
                     conn.send(f"OK{SEPERATOR}{file_size}".encode(FORMAT))  # let client know file has been found
+                    start_time = time.time()
                 else:
                     conn.send("NO".encode(FORMAT))
                     send_data = False
 
                 if send_data:
                     with open(full_path, 'rb') as file:
-                        # bytes_sent = SIZE
                         data = file.read(SIZE)
                         conn.send(data)
                         while data and conn.recv(SIZE).decode(FORMAT) == "OK":
                             data = file.read(SIZE)
                             conn.send(data)
+
                         conn.send("DONE".encode(FORMAT))
+
+                        end_time = time.time()
+                        transfer_time = end_time - start_time
+                        download_rate = file_size * (1e-6) / transfer_time
+                        system_response_time = end_time - start_time  # Simplified for now
+                        save_download_stats(session.username, os.path.basename(full_path), file_size * (1e-6),
+                                            download_rate,
+                                            transfer_time, system_response_time)
                         print("Server received file")
-                        
-            case "DELETE":
-                if(session.username is None):
+
+            case "DELETE":  # deletes a file
+                if (session.username is None):
                     send_data = "UNAUTHORIZED"
                     conn.send(send_data.encode(FORMAT))
                     continue
                 server_path = data[1]
-                if(check_valid_path(path)):
+                if (check_valid_path(path)):
                     send_data = "INVALID_FILE_PATH"
                     conn.send(send_data.encode(FORMAT))
                     continue
@@ -216,14 +234,14 @@ def check_user(conn, addr):
                     raise OSError
                 except OSError:
                     conn.send("NO".encode(FORMAT))
-            case "CREATE_SUBFOLDER":
-                if(session.username is None):
+            case "CREATE_SUBFOLDER":  # creates a subfolder
+                if (session.username is None):
                     send_data = "UNAUTHORIZED"
                     conn.send(send_data.encode(FORMAT))
                     continue
                 path = data[1]
                 subfolder_name = data[2]
-                if(check_valid_path(path) or check_valid_file_name(subfolder_name)):
+                if (check_valid_path(path) or check_valid_file_name(subfolder_name)):
                     send_data = "INVALID_FILE_PATH"
                     conn.send(send_data.encode(FORMAT))
                     continue
@@ -233,15 +251,15 @@ def check_user(conn, addr):
                     conn.send("CREATED".encode(FORMAT))
                 except OSError:
                     conn.send("NO".encode(FORMAT))
-                    
-            case "LIST_DIR":
-                if(session.username is None):
+
+            case "LIST_DIR":  # lets users view files in current directory
+                if (session.username is None):
                     send_data = "UNAUTHORIZED"
                     conn.send(send_data.encode(FORMAT))
                     continue
-                
+
                 path = data[1]
-                if(check_valid_path(path)):
+                if (check_valid_path(path)):
                     send_data = "INVALID_FILE_PATH"
                     conn.send(send_data.encode(FORMAT))
                     continue
@@ -257,20 +275,20 @@ def check_user(conn, addr):
                     directories = [item for item in items if os.path.isdir(os.path.join(full_path, item))]
 
                     json_dict = json.dumps({"Files": files, "Directories": directories}).encode(FORMAT)
-                    
+
                 except Exception as e:
                     print(f"There was an error in listing the files in the path {full_path}: {e}")
                     conn.send("NO".encode(FORMAT))
                     continue
-                
+
                 conn.send("OK".encode(FORMAT))
-                for data in [json_dict[i:i+SIZE] for i in range(0,len(json_dict), SIZE)]: #incase you have an unreasonably long folder with files and subfolders with lengths longer than 1024 bytes
+                for data in [json_dict[i:i + SIZE] for i in range(0, len(json_dict),
+                                                                  SIZE)]:  # incase you have an unreasonably long folder with files and subfolders with lengths longer than 1024 bytes
                     resp = conn.recv(SIZE).decode(FORMAT)
                     if resp != "OK":
                         break
                     conn.send(data)
                 conn.send("DONE".encode(FORMAT))
-
 
 
 def main():
@@ -286,7 +304,7 @@ def main():
         my_cursor.execute(sql)
         users = my_cursor.fetchone()
         print(users)
-        if users is None:
+        if users is None:  # create the user table if it doesnt exist
             sql = """CREATE TABLE users (
                 username varchar(255),
                 password varchar(255)
@@ -294,10 +312,12 @@ def main():
             my_cursor.execute(sql)
         db.commit()
         my_cursor.close()
-    if not os.path.isdir("root"):
+    if not os.path.isdir("root"):  # create root is it doesnt exist
         os.mkdir("root")
         print("root directory created")
-    while True:
+
+    network_analytics_init()  # begin network analysis
+    while True:  # start the server
         conn, addr = server.accept()
         thread = threading.Thread(target=check_user, args=(conn, addr))
         thread.start()
