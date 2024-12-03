@@ -87,7 +87,7 @@ def check_user(conn, addr):  # controls what action the client performs
                         my_cursor.execute(sql, val)
                         db.commit()
                         my_cursor.close()
-                    os.makedirs(os.path.join(BASE_PATH, username))
+                    os.makedirs(os.path.join(BASE_PATH, username).replace("\\","/"))
                     send_data = "200@OK"
                     conn.send(send_data.encode(FORMAT))
                 else:
@@ -135,7 +135,7 @@ def check_user(conn, addr):  # controls what action the client performs
                     conn.send(send_data.encode(FORMAT))
                     continue
 
-                full_path = os.path.join(BASE_PATH, session.username, file_path, file_name)
+                full_path = os.path.join(BASE_PATH, session.username, file_path, file_name).replace("\\","/")
 
                 write_file = False
                 if not os.path.isfile(full_path):  # see if file already exists
@@ -180,7 +180,7 @@ def check_user(conn, addr):  # controls what action the client performs
                     conn.send(send_data.encode(FORMAT))
                     continue
 
-                full_path = os.path.join(BASE_PATH, session.username, path)
+                full_path = os.path.join(BASE_PATH, session.username, path).replace("\\","/")
                 send_data = True
                 if os.path.isfile(full_path):  # see if file exists in server
                     file_size = os.path.getsize(full_path)
@@ -212,15 +212,17 @@ def check_user(conn, addr):  # controls what action the client performs
             case "DELETE":  # deletes a file
                 if (session.username is None):
                     send_data = "UNAUTHORIZED"
+                    print("test2")
                     conn.send(send_data.encode(FORMAT))
                     continue
                 server_path = data[1]
                 if (check_valid_path(path)):
                     send_data = "INVALID_FILE_PATH"
+                    print("test1")
                     conn.send(send_data.encode(FORMAT))
                     continue
 
-                full_path = os.path.join(BASE_PATH, session.username, server_path)
+                full_path = os.path.join(BASE_PATH, session.username, server_path).replace("\\","/")
 
                 try:
                     if os.path.isfile(full_path):
@@ -232,8 +234,11 @@ def check_user(conn, addr):  # controls what action the client performs
                         conn.send("OK".encode(FORMAT))
                         continue
                     raise OSError
-                except OSError:
+                except OSError as ose:
+                    print("test3")
+                    print(full_path)
                     conn.send("NO".encode(FORMAT))
+                    print(ose)
             case "CREATE_SUBFOLDER":  # creates a subfolder
                 if (session.username is None):
                     send_data = "UNAUTHORIZED"
@@ -245,7 +250,7 @@ def check_user(conn, addr):  # controls what action the client performs
                     send_data = "INVALID_FILE_PATH"
                     conn.send(send_data.encode(FORMAT))
                     continue
-                path_to_create = os.path.join(BASE_PATH, session.username, path, subfolder_name)
+                path_to_create = os.path.join(BASE_PATH, session.username, path, subfolder_name).replace("\\","/")
                 try:
                     os.makedirs(path_to_create)
                     conn.send("CREATED".encode(FORMAT))
@@ -264,15 +269,15 @@ def check_user(conn, addr):  # controls what action the client performs
                     conn.send(send_data.encode(FORMAT))
                     continue
 
-                full_path = os.path.join(BASE_PATH, session.username, path)
+                full_path = os.path.join(BASE_PATH, session.username, path).replace("\\","/")
                 json_dict = None
                 try:
                     # Gets all files and directories
                     items = os.listdir(full_path)
 
                     # Split files and directories into two different arrays
-                    files = [item for item in items if os.path.isfile(os.path.join(full_path, item))]
-                    directories = [item for item in items if os.path.isdir(os.path.join(full_path, item))]
+                    files = [item for item in items if os.path.isfile(os.path.join(full_path, item).replace("\\","/"))]
+                    directories = [item for item in items if os.path.isdir(os.path.join(full_path, item).replace("\\","/"))]
 
                     json_dict = json.dumps({"Files": files, "Directories": directories}).encode(FORMAT)
 
@@ -294,7 +299,7 @@ def check_user(conn, addr):  # controls what action the client performs
 def main():
     print("Starting the server...")
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind(ADDR)
+    server.bind((socket.gethostname(), PORT))
     server.listen()
     print(f"Server listening on {IP}: {PORT}")
 
