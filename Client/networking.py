@@ -55,7 +55,7 @@ class Downloader(QtCore.QObject):
         self.server_path = server_path
 
     def run(self):
-        with open(os.path.join(self.local_path, os.path.basename(self.server_path)), "wb") as nfile:
+        with open(os.path.join(self.local_path, os.path.basename(self.server_path)).replace("\\","/"), "wb") as nfile:
             data = self.client.recv(SIZE)  # after receive send conf
             self.client.send("OK".encode(FORMAT))
 

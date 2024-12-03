@@ -176,15 +176,15 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if(listitem.text() == ".."):
             new_path = os.path.dirname(self.get_path())
         else:
-            new_path = os.path.join(self.get_path(),listitem.text())
+            new_path = os.path.join(self.get_path(),listitem.text()).replace("\\","/")
         self.set_path(new_path)
     def download_file(self, listitem):
         directory = str(QtWidgets.QFileDialog.getExistingDirectory(self, "Choose directory to download to", "", QtWidgets.QFileDialog.ShowDirsOnly))
         if directory != "":
-            self.connector.download(directory, os.path.join(self.get_path(),listitem.text()))
+            self.connector.download(directory, os.path.join(self.get_path(),listitem.text().replace("\\","/")))
 
     def delete_file(self, listitem):
-        self.connector.delete_file(os.path.join(self.get_path(), listitem.text()))
+        self.connector.delete_file(os.path.join(self.get_path(), listitem.text().replace("\\","/")))
 
     def upload_file(self):
         file_path = QtWidgets.QFileDialog.getOpenFileName()
